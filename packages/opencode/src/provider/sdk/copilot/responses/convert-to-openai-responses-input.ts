@@ -1,7 +1,7 @@
 import {
-  type LanguageModelV2CallWarning,
   type LanguageModelV2Prompt,
   type LanguageModelV2ToolCallPart,
+  type LanguageModelV2CallWarning,
   UnsupportedFunctionalityError,
 } from "@ai-sdk/provider"
 import { convertToBase64, parseProviderOptions } from "@ai-sdk/provider-utils"
@@ -36,6 +36,7 @@ export async function convertToOpenAIResponsesInput({
 }> {
   const input: OpenAIResponsesInput = []
   const warnings: Array<LanguageModelV2CallWarning> = []
+  const processedApprovalIds = new Set<string>()
 
   for (const { role, content } of prompt) {
     switch (role) {
@@ -251,7 +252,41 @@ export async function convertToOpenAIResponsesInput({
 
       case "tool": {
         for (const part of content) {
+          const approval = part as { type?: string; approvalId?: string; approved?: boolean }
+          if (approval.type === "tool-approval-response" && approval.approvalId) {
+            if (processedApprovalIds.has(approval.approvalId)) {
+              continue
+            }
+            processedApprovalIds.add(approval.approvalId)
+
+            if (store) {
+              input.push({
+                type: "item_reference",
+                id: approval.approvalId,
+              })
+            }
+
+            input.push({
+              type: "mcp_approval_response",
+              approval_request_id: approval.approvalId,
+              approve: approval.approved ?? false,
+            })
+            continue
+          }
           const output = part.output
+
+          const denied = output as {
+            type?: string
+            reason?: string
+            providerOptions?: { openai?: { approvalId?: string } }
+          }
+          if (denied.type === "execution-denied") {
+            const approvalId = denied.providerOptions?.openai?.approvalId
+
+            if (approvalId) {
+              continue
+            }
+          }
 
           if (hasLocalShellTool && part.toolName === "local_shell" && output.type === "json") {
             input.push({
@@ -262,18 +297,12 @@ export async function convertToOpenAIResponsesInput({
             break
           }
 
-          let contentValue: string
-          switch (output.type) {
-            case "text":
-            case "error-text":
-              contentValue = output.value
-              break
-            case "content":
-            case "json":
-            case "error-json":
-              contentValue = JSON.stringify(output.value)
-              break
-          }
+          const contentValue =
+            denied.type === "execution-denied"
+              ? (denied.reason ?? "Tool execution denied.")
+              : output.type === "text" || output.type === "error-text"
+                ? output.value
+                : JSON.stringify(output.value)
 
           input.push({
             type: "function_call_output",
