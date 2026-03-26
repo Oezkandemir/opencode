@@ -1,4 +1,4 @@
-import { createProviderDefinedToolFactory } from "@ai-sdk/provider-utils"
+import { createProviderToolFactory } from "@ai-sdk/provider-utils"
 import { z } from "zod/v4"
 
 // Args validation schema
@@ -40,10 +40,28 @@ export const webSearchPreviewArgsSchema = z.object({
     .optional(),
 })
 
-export const webSearchPreview = createProviderDefinedToolFactory<
-  {
-    // Web search doesn't take input parameters - it's controlled by the prompt
-  },
+const webSearchPreviewInputSchema = z.object({
+  action: z
+    .discriminatedUnion("type", [
+      z.object({
+        type: z.literal("search"),
+        query: z.string().nullish(),
+      }),
+      z.object({
+        type: z.literal("open_page"),
+        url: z.string(),
+      }),
+      z.object({
+        type: z.literal("find"),
+        url: z.string(),
+        pattern: z.string(),
+      }),
+    ])
+    .nullish(),
+})
+
+export const webSearchPreview = createProviderToolFactory<
+  z.infer<typeof webSearchPreviewInputSchema>,
   {
     /**
      * Search context size to use for the web search.
@@ -81,24 +99,5 @@ export const webSearchPreview = createProviderDefinedToolFactory<
   }
 >({
   id: "openai.web_search_preview",
-  name: "web_search_preview",
-  inputSchema: z.object({
-    action: z
-      .discriminatedUnion("type", [
-        z.object({
-          type: z.literal("search"),
-          query: z.string().nullish(),
-        }),
-        z.object({
-          type: z.literal("open_page"),
-          url: z.string(),
-        }),
-        z.object({
-          type: z.literal("find"),
-          url: z.string(),
-          pattern: z.string(),
-        }),
-      ])
-      .nullish(),
-  }),
+  inputSchema: webSearchPreviewInputSchema,
 })

@@ -1,4 +1,4 @@
-import { createProviderDefinedToolFactory } from "@ai-sdk/provider-utils"
+import { createProviderToolFactory } from "@ai-sdk/provider-utils"
 import { z } from "zod/v4"
 
 export const webSearchArgsSchema = z.object({
@@ -21,10 +21,28 @@ export const webSearchArgsSchema = z.object({
     .optional(),
 })
 
-export const webSearchToolFactory = createProviderDefinedToolFactory<
-  {
-    // Web search doesn't take input parameters - it's controlled by the prompt
-  },
+const webSearchInputSchema = z.object({
+  action: z
+    .discriminatedUnion("type", [
+      z.object({
+        type: z.literal("search"),
+        query: z.string().nullish(),
+      }),
+      z.object({
+        type: z.literal("open_page"),
+        url: z.string(),
+      }),
+      z.object({
+        type: z.literal("find"),
+        url: z.string(),
+        pattern: z.string(),
+      }),
+    ])
+    .nullish(),
+})
+
+export const webSearchToolFactory = createProviderToolFactory<
+  z.infer<typeof webSearchInputSchema>,
   {
     /**
      * Filters for the search.
@@ -74,26 +92,7 @@ export const webSearchToolFactory = createProviderDefinedToolFactory<
   }
 >({
   id: "openai.web_search",
-  name: "web_search",
-  inputSchema: z.object({
-    action: z
-      .discriminatedUnion("type", [
-        z.object({
-          type: z.literal("search"),
-          query: z.string().nullish(),
-        }),
-        z.object({
-          type: z.literal("open_page"),
-          url: z.string(),
-        }),
-        z.object({
-          type: z.literal("find"),
-          url: z.string(),
-          pattern: z.string(),
-        }),
-      ])
-      .nullish(),
-  }),
+  inputSchema: webSearchInputSchema,
 })
 
 export const webSearch = (

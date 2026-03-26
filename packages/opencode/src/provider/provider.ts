@@ -9,7 +9,6 @@ import { Npm } from "../npm"
 import { Hash } from "../util/hash"
 import { Plugin } from "../plugin"
 import { NamedError } from "@opencode-ai/util/error"
-import { type LanguageModelV2 } from "@ai-sdk/provider"
 import { ModelsDev } from "./models"
 import { Auth } from "../auth"
 import { Env } from "../env"
@@ -110,9 +109,8 @@ export namespace Provider {
     })
   }
 
-  type BundledSDK = {
-    languageModel(modelId: string): LanguageModelV2
-  }
+  type Language = ReturnType<SDK["languageModel"]>
+  type BundledSDK = Pick<SDK, "languageModel">
 
   const BUNDLED_PROVIDERS: Record<string, (options: any) => BundledSDK> = {
     "@ai-sdk/amazon-bedrock": createAmazonBedrock,
@@ -951,7 +949,7 @@ export namespace Provider {
     }
 
     const providers: Record<ProviderID, Info> = {} as Record<ProviderID, Info>
-    const languages = new Map<string, LanguageModelV2>()
+    const languages = new Map<string, Language>()
     const modelLoaders: {
       [providerID: string]: CustomModelLoader
     } = {}
@@ -1376,7 +1374,7 @@ export namespace Provider {
     return info
   }
 
-  export async function getLanguage(model: Model): Promise<LanguageModelV2> {
+  export async function getLanguage(model: Model): Promise<Language> {
     const s = await state()
     const key = `${model.providerID}/${model.id}`
     if (s.models.has(key)) return s.models.get(key)!
